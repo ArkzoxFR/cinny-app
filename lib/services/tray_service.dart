@@ -128,6 +128,13 @@ class TrayService with TrayListener, WindowListener {
   }
 
   @override
+  void onTrayIconRightMouseDown() {
+    // Sur Windows, contrairement à macOS, le menu ne s'affiche pas tout seul
+    // au clic droit : il faut explicitement le déclencher ici.
+    trayManager.popUpContextMenu();
+  }
+
+  @override
   void onTrayMenuItemClick(MenuItem menuItem) async {
     switch (menuItem.key) {
       case 'open':

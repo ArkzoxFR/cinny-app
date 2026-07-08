@@ -18,6 +18,7 @@ class _WebviewScreenState extends State<WebviewScreen> {
   InAppWebViewController? _controller;
   bool _loading = true;
   bool _loadError = false;
+  String? _lastErrorDetail;
   String? _bannerMessage;
   Timer? _remoteCheckTimer;
 
@@ -141,6 +142,16 @@ class _WebviewScreenState extends State<WebviewScreen> {
                         setState(() {
                           _loading = false;
                           _loadError = true;
+                          _lastErrorDetail = '${error.type.name} — ${error.description}';
+                        });
+                      }
+                    },
+                    onReceivedHttpError: (controller, request, response) {
+                      if (request.isForMainFrame ?? true) {
+                        setState(() {
+                          _loading = false;
+                          _loadError = true;
+                          _lastErrorDetail = 'HTTP ${response.statusCode}';
                         });
                       }
                     },
@@ -160,6 +171,17 @@ class _WebviewScreenState extends State<WebviewScreen> {
                             'Impossible de joindre :\n${widget.url}',
                             textAlign: TextAlign.center,
                           ),
+                          if (_lastErrorDetail != null) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              _lastErrorDetail!,
+                              textAlign: TextAlign.center,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(color: Theme.of(context).colorScheme.error),
+                            ),
+                          ],
                           const SizedBox(height: 16),
                           FilledButton(
                             onPressed: () {
