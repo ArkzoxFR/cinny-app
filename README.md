@@ -1,6 +1,17 @@
 # cinny-app
 
-Client Cinny (Matrix) pour **Android, iOS et Windows**, avec :
+Une app qui garde Cinny (le chat Matrix) à portée de main sans avoir à laisser
+un onglet de navigateur ouvert en permanence — sur Windows, elle vit dans la
+barre des tâches : fermer la fenêtre ne quitte pas l'app, l'icône reste là, et
+un clic la fait réapparaître instantanément. Plus besoin de fouiller entre dix
+onglets pour retrouver sa messagerie, ni de se demander si le navigateur a
+mangé l'onglet en arrière-plan.
+
+Les mises à jour de l'app se signalent aussi toutes seules (icône + notification
+dans la barre des tâches) et s'installent en un clic, sans jamais avoir à aller
+chercher un nouvel exécutable à la main.
+
+Client Cinny (Matrix) pour **Android, iOS et Windows**, avec en plus :
 - une configuration du serveur demandée une seule fois au premier lancement ;
 - un fichier de configuration distant, hébergé sur ce dépôt GitHub, qui permet de
   **changer le serveur de toutes les installations déjà faites, sans réinstaller
@@ -125,6 +136,9 @@ L'app Windows (`lib/services/tray_service.dart` + `update_service.dart`) reste
 active dans la barre des tâches quand on ferme la fenêtre (la croix masque au
 lieu de quitter) ; clic droit sur l'icône propose "Ouvrir Cinny" et "Quitter"
 (le seul vrai moyen de fermer l'app), plus l'état de la mise à jour en cours.
+L'icône bascule automatiquement entre une version blanche et une version
+sombre selon le thème clair/sombre de Windows (`assets/tray_icon_light.ico` /
+`tray_icon_dark.ico`), pour rester lisible sur les deux.
 
 Publier une mise à jour Windows, entièrement depuis la console admin (rien à
 faire côté code/terminal) :

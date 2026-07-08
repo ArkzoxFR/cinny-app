@@ -1,7 +1,7 @@
 name: cinny_app
 description: Client Cinny (Matrix) — Android / iOS / Windows, avec configuration serveur pilotable à distance depuis GitHub.
 publish_to: 'none'
-version: 1.0.1+2
+version: 1.0.2+3
 
 environment:
   sdk: '>=3.3.0 <4.0.0'
@@ -40,4 +40,5 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - assets/tray_icon.ico
+    - assets/tray_icon_light.ico
+    - assets/tray_icon_dark.ico

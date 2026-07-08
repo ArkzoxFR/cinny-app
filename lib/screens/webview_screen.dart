@@ -142,7 +142,7 @@ class _WebviewScreenState extends State<WebviewScreen> {
                         setState(() {
                           _loading = false;
                           _loadError = true;
-                          _lastErrorDetail = '${error.type.name} — ${error.description}';
+                          _lastErrorDetail = '${error.type} — ${error.description}';
                         });
                       }
                     },

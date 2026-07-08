@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:local_notifier/local_notifier.dart';
@@ -33,7 +34,8 @@ class TrayService with TrayListener, WindowListener {
 
       await localNotifier.setup(appName: 'Cinny', shortcutPolicy: ShortcutPolicy.requireCreate);
 
-      await trayManager.setIcon(_resolveAssetPath('assets/tray_icon.ico'));
+      await _applyThemedIcon();
+      PlatformDispatcher.instance.onPlatformBrightnessChanged = _applyThemedIcon;
       await trayManager.setToolTip('Cinny');
       trayManager.addListener(this);
 
@@ -55,6 +57,17 @@ class TrayService with TrayListener, WindowListener {
     windowManager.removeListener(this);
     trayManager.removeListener(this);
     UpdateService.instance.status.removeListener(_onUpdateStatusChanged);
+    PlatformDispatcher.instance.onPlatformBrightnessChanged = null;
+  }
+
+  /// Choisit l'icône blanche (thème sombre) ou noire (thème clair) selon le
+  /// thème système actuel, et réagit si l'utilisateur le change en cours de
+  /// route — un icône fixe deviendrait invisible sur l'une des deux barres
+  /// des tâches.
+  Future<void> _applyThemedIcon() async {
+    final isDark = PlatformDispatcher.instance.platformBrightness == Brightness.dark;
+    final asset = isDark ? 'assets/tray_icon_light.ico' : 'assets/tray_icon_dark.ico';
+    await trayManager.setIcon(_resolveAssetPath(asset));
   }
 
   /// Les assets Flutter ne sont pas accessibles par chemin disque au sens où
