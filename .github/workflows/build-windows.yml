@@ -5,6 +5,9 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: windows-latest
@@ -24,11 +27,40 @@ jobs:
       - name: Build release exe
         run: flutter build windows --release
 
-      - name: Zip build output
-        run: Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath cinny-app-windows.zip
+      - name: Determine app version
+        shell: pwsh
+        run: |
+          $pubspec = Get-Content pubspec.yaml -Raw
+          if ($pubspec -match 'version:\s*([0-9]+\.[0-9]+\.[0-9]+)') {
+            echo "APP_VERSION=$($matches[1])" >> $env:GITHUB_ENV
+          } else {
+            throw "Impossible de lire la version dans pubspec.yaml"
+          }
 
-      - name: Upload build
+      - name: Build installer (Inno Setup)
+        shell: pwsh
+        run: |
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DAppVersion=$env:APP_VERSION" "windows\installer.iss"
+
+      - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
-          name: cinny-app-windows
-          path: cinny-app-windows.zip
+          name: cinny-app-windows-installer
+          path: windows/installer_output/CinnyApp-Setup.exe
+
+      # Donne une URL de téléchargement stable et publique (utilisée par le
+      # flux de mise à jour intégré à l'app, voir lib/services/update_service.dart)
+      # et par la console admin pour "publier" une version.
+      - name: Publish GitHub Release
+        if: github.ref == 'refs/heads/main'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = "v$env:APP_VERSION"
+          gh release view $tag
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag "windows\installer_output\CinnyApp-Setup.exe" --clobber
+          } else {
+            gh release create $tag "windows\installer_output\CinnyApp-Setup.exe" --title "Cinny $tag (Windows)" --notes "Build automatique depuis main."
+          }

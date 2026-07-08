@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
 import 'services/config_service.dart';
 import 'services/remote_config_service.dart';
+import 'services/tray_service.dart';
 import 'screens/setup_screen.dart';
 import 'screens/webview_screen.dart';
+import 'widgets/update_overlay.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  // No-op sur Android/iOS : TrayService ne s'active que sur Windows.
+  await TrayService.instance.init();
   runApp(const CinnyApp());
 }
 
@@ -26,6 +31,14 @@ class CinnyApp extends StatelessWidget {
         useMaterial3: true,
         brightness: Brightness.dark,
       ),
+      builder: (context, child) {
+        return Stack(
+          children: [
+            if (child != null) child,
+            const UpdateOverlay(),
+          ],
+        );
+      },
       home: const _StartupGate(),
     );
   }

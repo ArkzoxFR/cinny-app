@@ -20,12 +20,14 @@ class RemoteConfig {
   final String? forceUrl;
   final String? message;
   final bool maintenance;
+  final String? latestVersion;
 
   const RemoteConfig({
     this.defaultUrl,
     this.forceUrl,
     this.message,
     this.maintenance = false,
+    this.latestVersion,
   });
 
   factory RemoteConfig.fromJson(Map<String, dynamic> json) {
@@ -34,6 +36,7 @@ class RemoteConfig {
       forceUrl: (json['force_url'] as String?)?.trim(),
       message: (json['message'] as String?)?.trim(),
       maintenance: json['maintenance'] == true,
+      latestVersion: (json['latest_version'] as String?)?.trim(),
     );
   }
 

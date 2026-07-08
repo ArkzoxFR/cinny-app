@@ -38,8 +38,12 @@ lib/
   screens/webview_screen.dart   → écran principal (webview + changement manuel)
   services/config_service.dart        → stockage local de l'URL
   services/remote_config_service.dart → lecture du JSON distant sur GitHub
+  services/tray_service.dart          → icône barre des tâches (Windows)
+  services/update_service.dart        → détection/téléchargement des MAJ (Windows)
+  widgets/update_overlay.dart         → fenêtre de progression pendant le téléchargement
 config/remote_config.json       → fichier piloté par la console admin
-admin/index.html                → console d'admin (à héberger sur GitHub Pages)
+admin/index.html                → console d'admin (hébergée sur GitHub Pages)
+windows/installer.iss           → script Inno Setup (génère CinnyApp-Setup.exe)
 .github/workflows/              → build auto Android / Windows / iOS
 pubspec.yaml                    → dépendances Flutter
 ```
@@ -87,8 +91,14 @@ manuelle, elle prend 2 minutes (voir ci-dessous).
 
 ## Activer la console d'admin
 
-La page `admin/index.html` est un fichier statique : le plus simple est de
-l'héberger avec **GitHub Pages**, gratuitement, directement depuis ce dépôt.
+La page `admin/index.html` est un fichier statique, hébergée gratuitement avec
+**GitHub Pages** directement depuis ce dépôt (déjà activé) :
+**https://arkzoxfr.github.io/cinny-app/admin/**
+
+Ça ne fonctionne que parce que le dépôt est **public** — GitHub Pages gratuit
+et la lecture de `config/remote_config.json` via `raw.githubusercontent.com`
+(sans authentification, voir plus haut) l'exigent tous les deux. Aucun secret
+n'est stocké dans le dépôt : le token admin reste local au navigateur.
 
 1. Sur GitHub : `Settings` → `Pages` → `Source: Deploy from a branch` → branche
    `main`, dossier `/ (root)` (ou déplace `admin/index.html` vers `docs/index.html`
@@ -109,6 +119,33 @@ Le token reste uniquement dans ton navigateur (envoyé seulement à
 `api.github.com`) — il n'est jamais stocké ailleurs que sur ton appareil, et
 seulement si tu coches "se souvenir".
 
+## Windows : icône barre des tâches et mises à jour
+
+L'app Windows (`lib/services/tray_service.dart` + `update_service.dart`) reste
+active dans la barre des tâches quand on ferme la fenêtre (la croix masque au
+lieu de quitter) ; clic droit sur l'icône propose "Ouvrir Cinny" et "Quitter"
+(le seul vrai moyen de fermer l'app), plus l'état de la mise à jour en cours.
+
+Publier une mise à jour Windows :
+
+1. Bump la version dans `pubspec.yaml` (ex. `1.0.1+2`), commit, push sur `main`.
+2. La CI (`build-windows.yml`) build l'app, génère l'installeur avec
+   **Inno Setup** (`windows/installer.iss`) et le publie automatiquement comme
+   **GitHub Release** taguée `v1.0.1` — c'est ce fichier que les gens
+   téléchargent pour installer l'app (`CinnyApp-Setup.exe`, install par
+   utilisateur, sans droits admin).
+3. Une fois ce build vert, ouvre la console admin, indique `1.0.1` dans
+   "Dernière version publiée", clique "Enregistrer et publier".
+4. Dans les 10 minutes, toutes les applis installées détectent que
+   `latest_version` > leur version locale (`package_info_plus`) : l'icône
+   tray notifie "Mise à jour disponible" et propose "Installer la mise à
+   jour" (télécharge l'installeur avec barre de progression). Une fois
+   téléchargé, le menu propose "Redémarrer" : l'app se ferme, l'installeur
+   tourne en silencieux, et relance Cinny automatiquement.
+
+Étape 3 est volontairement manuelle (l'admin garde la main sur qui reçoit
+quoi et quand), même si l'étape 2 est déjà automatique à chaque push.
+
 ## Limites à connaître
 
 - **iOS** : Apple impose un compte Apple Developer (payant) et une signature
@@ -118,6 +155,11 @@ seulement si tu coches "se souvenir".
   étape, on ajoutera tes certificats en secrets GitHub.
 - Le mécanisme distant sert à changer **la configuration** (l'URL du serveur),
   pas à pousser du nouveau code exécutable dans une app déjà installée — ce
-  n'est techniquement pas permis sur iOS/Android par les stores, et c'est aussi
-  plus sûr ainsi. Pour un vrai changement de code, il faut une nouvelle version
-  buildée (les workflows GitHub Actions s'en chargent) puis publiée/réinstallée.
+  n'est techniquement pas permis sur iOS/Android par les stores. Sur Windows
+  en revanche, le vrai code change bien (voir section ci-dessus) puisqu'on ne
+  passe pas par un store.
+- **`CinnyApp-Setup.exe` n'est pas signé** (pas de certificat de signature de
+  code, payant). Windows SmartScreen affichera un avertissement "Éditeur
+  inconnu" au premier lancement — normal, il faut cliquer sur "Informations
+  complémentaires" → "Exécuter quand même". Dis-moi si tu veux qu'on ajoute
+  une signature plus tard.

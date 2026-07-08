@@ -22,8 +22,15 @@ dependencies:
   # Appels réseau pour aller chercher le fichier de config distant sur GitHub.
   http: ^1.2.2
 
-  # Utile pour afficher la version de l'app dans un écran de debug/à propos.
+  # Utile pour afficher la version de l'app dans un écran de debug/à propos,
+  # et pour comparer la version installée à la dernière version publiée.
   package_info_plus: ^8.0.0
+
+  # Windows uniquement : icône dans la barre des tâches, fermeture vers le
+  # tray au lieu de quitter, et notifications natives pour le flux de MAJ.
+  window_manager: ^0.5.2
+  tray_manager: ^0.5.3
+  local_notifier: ^0.1.6
 
 dev_dependencies:
   flutter_test:
@@ -32,3 +39,5 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/tray_icon.ico

@@ -169,6 +169,20 @@
           <span class="log" id="saveLog"></span>
         </div>
       </section>
+
+      <section class="card">
+        <h2>Mise à jour Windows</h2>
+        <div class="footline" style="margin:0 0 14px;">
+          1) Bump la version dans <code>pubspec.yaml</code>, push sur <code>main</code> : la CI
+          construit et publie automatiquement l'installeur en GitHub Release.
+          2) Une fois ce build vert, indique la même version ici puis « Enregistrer et publier »
+          ci-dessus : toutes les applis déjà installées verront l'icône de mise à jour dans les
+          10 minutes.
+        </div>
+        <label for="latestVersion">Dernière version publiée (ex : 1.0.1)</label>
+        <input type="text" id="latestVersion" placeholder="1.0.1" />
+        <div class="footline" id="releaseLinkLine"></div>
+      </section>
     </div>
   </div>
 
@@ -252,6 +266,14 @@ function renderReadout(cfg){
   document.body.classList.toggle('armed', !!cfg.force_url && !cfg.maintenance);
 }
 
+function renderReleaseLink(){
+  const v = el('latestVersion').value.trim();
+  const line = el('releaseLinkLine');
+  if (!v){ line.innerHTML = ''; return; }
+  const url = `https://github.com/${OWNER}/${REPO}/releases/tag/v${v}`;
+  line.innerHTML = `Doit correspondre à une release déjà publiée par la CI : <a href="${url}" target="_blank" rel="noopener" style="color:var(--ok)">${url}</a>`;
+}
+
 function fillForm(cfg){
   el('defaultUrl').value = cfg.default_url || '';
   el('forceUrl').value = cfg.force_url || '';
@@ -259,7 +281,9 @@ function fillForm(cfg){
   el('forceUrl').disabled = !cfg.force_url;
   el('message').value = cfg.message || '';
   el('maintenanceToggle').checked = !!cfg.maintenance;
+  el('latestVersion').value = cfg.latest_version || '';
   renderReadout(cfg);
+  renderReleaseLink();
 }
 
 function readForm(){
@@ -268,6 +292,7 @@ function readForm(){
     force_url: el('forceToggle').checked ? el('forceUrl').value.trim() : null,
     message: el('message').value.trim() || null,
     maintenance: el('maintenanceToggle').checked,
+    latest_version: el('latestVersion').value.trim() || null,
     updated_at: new Date().toISOString()
   };
 }
@@ -278,6 +303,7 @@ el('forceToggle').addEventListener('change', () => {
 });
 el('maintenanceToggle').addEventListener('change', () => renderReadout(readForm()));
 el('forceUrl').addEventListener('input', () => renderReadout(readForm()));
+el('latestVersion').addEventListener('input', renderReleaseLink);
 
 el('connectBtn').addEventListener('click', async () => {
   const value = el('token').value.trim();
