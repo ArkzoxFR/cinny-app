@@ -11,7 +11,10 @@ dependencies:
     sdk: flutter
 
   # WebView unique pour Android, iOS, Windows (WebView2), macOS, Linux.
-  flutter_inappwebview: ^6.1.5
+  # Version 6.2.0-beta.x requise (pas 6.1.5) : c'est la seule qui corrige la
+  # compatibilité avec l'Android Gradle Plugin 9 (sinon le build Android
+  # échoue sur flutter_inappwebview_android / proguard-android.txt).
+  flutter_inappwebview: ^6.2.0-beta.3
 
   # Stockage local de l'URL choisie par l'utilisateur au premier lancement.
   shared_preferences: ^2.3.2
