@@ -173,15 +173,32 @@
       <section class="card">
         <h2>Mise à jour Windows</h2>
         <div class="footline" style="margin:0 0 14px;">
-          1) Bump la version dans <code>pubspec.yaml</code>, push sur <code>main</code> : la CI
-          construit et publie automatiquement l'installeur en GitHub Release.
-          2) Une fois ce build vert, indique la même version ici puis « Enregistrer et publier »
-          ci-dessus : toutes les applis déjà installées verront l'icône de mise à jour dans les
-          10 minutes.
+          Construit une nouvelle version de l'app (bump automatique de la version, build CI,
+          installeur), puis notifie toutes les applis déjà installées dès que c'est prêt —
+          rien à faire côté code ou terminal.
         </div>
-        <label for="latestVersion">Dernière version publiée (ex : 1.0.1)</label>
-        <input type="text" id="latestVersion" placeholder="1.0.1" />
-        <div class="footline" id="releaseLinkLine"></div>
+        <label for="newVersion">Nouvelle version (ex : 1.0.2)</label>
+        <input type="text" id="newVersion" placeholder="1.0.2" />
+        <div style="margin-top:14px; display:flex; gap:10px; align-items:center;">
+          <button class="btn btn-primary" id="buildBtn">Construire et publier</button>
+          <span class="log" id="buildLog"></span>
+        </div>
+
+        <details style="margin-top:20px;">
+          <summary style="cursor:pointer; color:var(--muted); font-size:13px;">
+            Option avancée : republier une version déjà construite
+          </summary>
+          <div style="margin-top:12px;">
+            <label for="latestVersion">Dernière version publiée</label>
+            <input type="text" id="latestVersion" placeholder="1.0.1" />
+            <div class="footline" id="releaseLinkLine"></div>
+            <div class="footline">
+              À utiliser seulement pour re-publier ou revenir à une version dont
+              l'installeur a déjà été construit par la CI — sinon utilise le champ
+              du dessus. Publié via le bouton « Enregistrer et publier » plus haut.
+            </div>
+          </div>
+        </details>
       </section>
     </div>
   </div>
@@ -210,6 +227,36 @@ function b64DecodeUnicode(str){
   return decodeURIComponent(escape(atob(str)));
 }
 
+// localStorage/sessionStorage sont indisponibles dans certains contextes
+// (ex: page ouverte via une URL data:, navigation privée stricte) — on
+// dégrade proprement au lieu de laisser planter la page avec une erreur
+// cryptique. Utilise toujours https://arkzoxfr.github.io/cinny-app/admin/
+// pour avoir un vrai contexte https:// où le "se souvenir" fonctionne.
+function safeStorageGet(key){
+  try { return localStorage.getItem(key) || sessionStorage.getItem(key); } catch (_) { return null; }
+}
+function safeStorageSet(persist, key, value){
+  try { (persist ? localStorage : sessionStorage).setItem(key, value); } catch (_) {}
+}
+function safeStorageRemove(key){
+  try { localStorage.removeItem(key); sessionStorage.removeItem(key); } catch (_) {}
+}
+function safeStorageHasPersisted(key){
+  try { return !!localStorage.getItem(key); } catch (_) { return false; }
+}
+
+function friendlyError(status, rawMessage){
+  const msg = rawMessage || '';
+  if (status === 403 || /not accessible by personal access token/i.test(msg)){
+    return 'Le token n\'a pas la permission d\'écrire ici. Sur GitHub → Settings → ' +
+      'Developer settings → Fine-grained tokens : vérifie qu\'il cible bien le dépôt ' +
+      '"cinny-app" et a la permission "Contents: Read and write" (pas juste lecture).';
+  }
+  if (status === 401) return 'Token invalide ou expiré — recrée-en un.';
+  if (status === 404) return 'Introuvable avec ce token (vérifie qu\'il cible bien "cinny-app").';
+  return msg || ('Erreur ' + status);
+}
+
 async function githubFetch(){
   const res = await fetch(`${API_BASE}?ref=${BRANCH}`, {
     headers: {
@@ -217,7 +264,10 @@ async function githubFetch(){
       'Accept': 'application/vnd.github+json'
     }
   });
-  if (!res.ok) throw new Error('Lecture impossible (' + res.status + ')');
+  if (!res.ok){
+    const err = await res.json().catch(() => ({}));
+    throw new Error(friendlyError(res.status, err.message));
+  }
   const data = await res.json();
   currentSha = data.sha;
   return JSON.parse(b64DecodeUnicode(data.content));
@@ -241,10 +291,108 @@ async function githubSave(newConfig){
   });
   if (!res.ok){
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || ('Écriture impossible (' + res.status + ')'));
+    throw new Error(friendlyError(res.status, err.message));
   }
   const data = await res.json();
   currentSha = data.content.sha;
+}
+
+// --- Construction + publication d'une nouvelle version depuis la console ---
+
+async function ghApi(path, options){
+  const res = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/${path}`, {
+    ...options,
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Accept': 'application/vnd.github+json',
+      ...(options && options.body ? { 'Content-Type': 'application/json' } : {})
+    }
+  });
+  if (!res.ok){
+    const err = await res.json().catch(() => ({}));
+    throw new Error(friendlyError(res.status, err.message));
+  }
+  return res.json();
+}
+
+function sleep(ms){ return new Promise((resolve) => setTimeout(resolve, ms)); }
+
+async function waitForWorkflowRun(commitSha, onProgress){
+  const deadline = Date.now() + 15 * 60 * 1000;
+  while (Date.now() < deadline){
+    const data = await ghApi('actions/runs?per_page=15');
+    const run = (data.workflow_runs || []).find(
+      (r) => r.head_sha === commitSha && r.name === 'Build Windows'
+    );
+    if (run){
+      onProgress(run.status === 'completed' ? run.conclusion : run.status, run.html_url);
+      if (run.status === 'completed') return run;
+    } else {
+      onProgress('en attente de démarrage', null);
+    }
+    await sleep(10000);
+  }
+  throw new Error('Le build prend plus de 15 minutes, vérifie manuellement dans l\'onglet Actions de GitHub.');
+}
+
+async function buildAndPublish(version){
+  const log = el('buildLog');
+  const btn = el('buildBtn');
+
+  if (!/^\d+\.\d+\.\d+$/.test(version)){
+    log.textContent = 'Format attendu : X.Y.Z (ex : 1.0.2)';
+    return;
+  }
+
+  btn.disabled = true;
+  try {
+    log.textContent = 'Lecture de pubspec.yaml…';
+    const pubspecData = await ghApi(`contents/pubspec.yaml?ref=${BRANCH}`);
+    const content = b64DecodeUnicode(pubspecData.content);
+    const match = content.match(/version:\s*\d+\.\d+\.\d+\+(\d+)/);
+    if (!match){
+      throw new Error('Ligne "version:" introuvable dans pubspec.yaml.');
+    }
+    const newContent = content.replace(
+      /version:\s*\d+\.\d+\.\d+\+\d+/,
+      `version: ${version}+${parseInt(match[1], 10) + 1}`
+    );
+
+    log.textContent = 'Publication du bump de version…';
+    const putResult = await ghApi('contents/pubspec.yaml', {
+      method: 'PUT',
+      body: JSON.stringify({
+        message: `admin: publie la version ${version}`,
+        content: b64EncodeUnicode(newContent),
+        branch: BRANCH,
+        sha: pubspecData.sha
+      })
+    });
+
+    log.textContent = 'Build en cours (~5-8 min)…';
+    const run = await waitForWorkflowRun(putResult.commit.sha, (status) => {
+      log.textContent = `Build en cours… (${status})`;
+    });
+
+    if (run.conclusion !== 'success'){
+      log.innerHTML = `Le build a échoué, mise à jour NON publiée. ` +
+        `<a href="${run.html_url}" target="_blank" rel="noopener" style="color:var(--danger)">Voir le run</a>`;
+      return;
+    }
+
+    log.textContent = 'Build réussi, publication de la mise à jour…';
+    const cfg = await githubFetch();
+    cfg.latest_version = version;
+    cfg.updated_at = new Date().toISOString();
+    await githubSave(cfg);
+    fillForm(cfg);
+
+    log.textContent = `Version ${version} construite et publiée à ${new Date().toLocaleTimeString()}`;
+  } catch (e){
+    log.textContent = 'Erreur : ' + e.message;
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 function renderReadout(cfg){
@@ -318,11 +466,7 @@ el('connectBtn').addEventListener('click', async () => {
     el('connectBtn').classList.add('hidden');
     el('token').disabled = true;
     setConn('ok', 'connecté');
-    if (el('rememberToken').checked){
-      localStorage.setItem('cinny_admin_token', value);
-    } else {
-      sessionStorage.setItem('cinny_admin_token', value);
-    }
+    safeStorageSet(el('rememberToken').checked, 'cinny_admin_token', value);
   } catch (e){
     setConn('err', e.message);
   }
@@ -330,8 +474,7 @@ el('connectBtn').addEventListener('click', async () => {
 
 el('disconnectBtn').addEventListener('click', () => {
   token = null;
-  localStorage.removeItem('cinny_admin_token');
-  sessionStorage.removeItem('cinny_admin_token');
+  safeStorageRemove('cinny_admin_token');
   el('token').value = '';
   el('token').disabled = false;
   el('panel').classList.add('hidden');
@@ -358,12 +501,16 @@ el('saveBtn').addEventListener('click', async () => {
   }
 });
 
+el('buildBtn').addEventListener('click', () => {
+  buildAndPublish(el('newVersion').value.trim());
+});
+
 // Auto-reconnect if a token was remembered.
 (function tryAutoConnect(){
-  const saved = localStorage.getItem('cinny_admin_token') || sessionStorage.getItem('cinny_admin_token');
+  const saved = safeStorageGet('cinny_admin_token');
   if (saved){
     el('token').value = saved;
-    el('rememberToken').checked = !!localStorage.getItem('cinny_admin_token');
+    el('rememberToken').checked = safeStorageHasPersisted('cinny_admin_token');
     el('connectBtn').click();
   }
 })();

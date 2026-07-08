@@ -126,22 +126,28 @@ active dans la barre des tâches quand on ferme la fenêtre (la croix masque au
 lieu de quitter) ; clic droit sur l'icône propose "Ouvrir Cinny" et "Quitter"
 (le seul vrai moyen de fermer l'app), plus l'état de la mise à jour en cours.
 
-Publier une mise à jour Windows :
+Publier une mise à jour Windows, entièrement depuis la console admin (rien à
+faire côté code/terminal) :
 
-1. Bump la version dans `pubspec.yaml` (ex. `1.0.1+2`), commit, push sur `main`.
-2. La CI (`build-windows.yml`) build l'app, génère l'installeur avec
-   **Inno Setup** (`windows/installer.iss`) et le publie automatiquement comme
-   **GitHub Release** taguée `v1.0.1` — c'est ce fichier que les gens
-   téléchargent pour installer l'app (`CinnyApp-Setup.exe`, install par
-   utilisateur, sans droits admin).
-3. Une fois ce build vert, ouvre la console admin, indique `1.0.1` dans
-   "Dernière version publiée", clique "Enregistrer et publier".
-4. Dans les 10 minutes, toutes les applis installées détectent que
+1. Ouvre la console admin, section "Mise à jour Windows", indique le nouveau
+   numéro de version (ex. `1.0.2`), clique "Construire et publier".
+2. La console bump elle-même la version dans `pubspec.yaml` via l'API GitHub,
+   attend que la CI (`build-windows.yml`) build l'app et génère l'installeur
+   avec **Inno Setup** (`windows/installer.iss`) — publié automatiquement
+   comme **GitHub Release** taguée `v1.0.2` (`CinnyApp-Setup.exe`, install par
+   utilisateur, sans droits admin) — puis, si le build est vert, publie
+   automatiquement `latest_version` dans `remote_config.json`. Ça prend
+   5 à 8 minutes, suivi en direct dans la console.
+3. Dans les 10 minutes suivantes, toutes les applis installées détectent que
    `latest_version` > leur version locale (`package_info_plus`) : l'icône
    tray notifie "Mise à jour disponible" et propose "Installer la mise à
    jour" (télécharge l'installeur avec barre de progression). Une fois
    téléchargé, le menu propose "Redémarrer" : l'app se ferme, l'installeur
    tourne en silencieux, et relance Cinny automatiquement.
+
+(L'option avancée "republier une version déjà construite" dans la console
+reste utile pour re-notifier ou revenir à une version dont l'installeur
+existe déjà, sans relancer un build.)
 
 Étape 3 est volontairement manuelle (l'admin garde la main sur qui reçoit
 quoi et quand), même si l'étape 2 est déjà automatique à chaque push.
