@@ -1,0 +1,31 @@
+name: cinny_app
+description: Client Cinny (Matrix) — Android / iOS / Windows, avec configuration serveur pilotable à distance depuis GitHub.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # WebView unique pour Android, iOS, Windows (WebView2), macOS, Linux.
+  flutter_inappwebview: ^6.1.5
+
+  # Stockage local de l'URL choisie par l'utilisateur au premier lancement.
+  shared_preferences: ^2.3.2
+
+  # Appels réseau pour aller chercher le fichier de config distant sur GitHub.
+  http: ^1.2.2
+
+  # Utile pour afficher la version de l'app dans un écran de debug/à propos.
+  package_info_plus: ^8.0.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true

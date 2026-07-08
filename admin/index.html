@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Console — cinny-app</title>
+<style>
+  :root{
+    --bg:#0D1117;
+    --panel:#161B22;
+    --panel-2:#1C232C;
+    --border:#2B3440;
+    --text:#E6EDF3;
+    --muted:#8B98A5;
+    --ok:#3FB985;
+    --ok-dim:#173324;
+    --warn:#E8A33D;
+    --warn-dim:#3A2C12;
+    --danger:#E5534B;
+    --danger-dim:#3A1B19;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; min-height:100vh; background:var(--bg); color:var(--text);
+    font-family:var(--sans);
+    padding:40px 20px 80px;
+    transition: box-shadow .4s ease;
+  }
+  body.armed{
+    box-shadow: inset 0 0 0 3px var(--warn);
+  }
+  .wrap{max-width:640px; margin:0 auto;}
+  header{display:flex; align-items:baseline; justify-content:space-between; margin-bottom:28px; gap:12px; flex-wrap:wrap;}
+  header .brand{font-family:var(--mono); font-size:13px; letter-spacing:.08em; color:var(--muted); text-transform:uppercase;}
+  header h1{font-family:var(--mono); font-size:20px; margin:2px 0 0; font-weight:600;}
+  .dot{display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:8px; vertical-align:1px;}
+  .dot.ok{background:var(--ok); box-shadow:0 0 8px var(--ok);}
+  .dot.off{background:#556; }
+  .dot.err{background:var(--danger); box-shadow:0 0 8px var(--danger);}
+  #connStatus{font-family:var(--mono); font-size:12px; color:var(--muted);}
+
+  .card{
+    background:var(--panel); border:1px solid var(--border); border-radius:10px;
+    padding:20px 22px; margin-bottom:16px;
+  }
+  .card h2{
+    font-family:var(--mono); font-size:11px; letter-spacing:.1em; text-transform:uppercase;
+    color:var(--muted); margin:0 0 14px;
+  }
+
+  /* --- Signature element: status readout --- */
+  .readout{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:18px 20px; border-radius:8px; border:1px solid var(--border);
+    background:var(--ok-dim); transition:background .3s, border-color .3s;
+  }
+  .readout.armed{ background:var(--warn-dim); border-color:var(--warn); }
+  .readout.maintenance{ background:var(--danger-dim); border-color:var(--danger); }
+  .readout .state{font-family:var(--mono); font-size:15px; font-weight:600;}
+  .readout .state small{display:block; font-family:var(--sans); font-weight:400; font-size:12px; color:var(--muted); margin-top:4px;}
+  .readout .state.ok{color:var(--ok);}
+  .readout .state.armed{color:var(--warn);}
+  .readout .state.maintenance{color:var(--danger);}
+
+  label{display:block; font-size:12px; color:var(--muted); margin:14px 0 6px;}
+  input[type=text], input[type=password], textarea{
+    width:100%; background:var(--panel-2); border:1px solid var(--border); color:var(--text);
+    padding:10px 12px; border-radius:6px; font-family:var(--mono); font-size:13.5px;
+  }
+  textarea{resize:vertical; min-height:60px;}
+  input:focus, textarea:focus{outline:2px solid var(--ok); outline-offset:1px;}
+
+  .row{display:flex; align-items:center; justify-content:space-between; gap:12px; margin:14px 0 6px;}
+  .row label{margin:0;}
+
+  /* toggle switch styled like a breaker */
+  .switch{position:relative; width:44px; height:24px; flex:none;}
+  .switch input{opacity:0; width:0; height:0;}
+  .slider{position:absolute; inset:0; background:#333c47; border-radius:24px; cursor:pointer; transition:.2s;}
+  .slider::before{content:""; position:absolute; width:18px; height:18px; left:3px; top:3px; background:#cfd6dd; border-radius:50%; transition:.2s;}
+  .switch input:checked + .slider{background:var(--warn);}
+  .switch input:checked + .slider::before{transform:translateX(20px); background:#1b1400;}
+
+  .btn{
+    font-family:var(--sans); font-weight:600; font-size:14px; border:none; border-radius:7px;
+    padding:11px 18px; cursor:pointer; transition:filter .15s;
+  }
+  .btn:hover{filter:brightness(1.08);}
+  .btn:disabled{opacity:.5; cursor:not-allowed;}
+  .btn-primary{background:var(--ok); color:#04140C;}
+  .btn-ghost{background:transparent; color:var(--muted); border:1px solid var(--border);}
+
+  .footline{font-size:12px; color:var(--muted); margin-top:8px; line-height:1.5;}
+  .log{font-family:var(--mono); font-size:12px; color:var(--muted); margin-top:10px; white-space:pre-wrap;}
+  .hidden{display:none !important;}
+  .remember{display:flex; align-items:center; gap:8px; font-size:12px; color:var(--muted); margin-top:10px;}
+  .remember input{width:auto;}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div>
+        <div class="brand">Cinny-app · remote control</div>
+        <h1 id="repoTitle">ArkzoxFR / cinny-app</h1>
+      </div>
+      <div id="connStatus"><span class="dot off" id="connDot"></span><span id="connText">non connecté</span></div>
+    </header>
+
+    <!-- Token card -->
+    <section class="card" id="tokenCard">
+      <h2>Accès</h2>
+      <label for="token">Token GitHub (fine-grained, permission "Contents: Read and write" sur ce dépôt uniquement)</label>
+      <input type="password" id="token" placeholder="github_pat_..." autocomplete="off" />
+      <div class="remember">
+        <input type="checkbox" id="rememberToken" />
+        <label for="rememberToken" style="margin:0;">Se souvenir du token sur cet appareil (déconseillé sur un poste partagé)</label>
+      </div>
+      <div style="margin-top:14px; display:flex; gap:10px;">
+        <button class="btn btn-primary" id="connectBtn">Se connecter</button>
+        <button class="btn btn-ghost hidden" id="disconnectBtn">Se déconnecter</button>
+      </div>
+      <div class="footline">
+        Le token n'est jamais envoyé ailleurs qu'à <code>api.github.com</code>, directement depuis ton navigateur.
+        Crée-le sur GitHub → Settings → Developer settings → Fine-grained tokens, en le limitant au dépôt <code>cinny-app</code>.
+      </div>
+    </section>
+
+    <!-- Status + form (hidden until connected) -->
+    <div id="panel" class="hidden">
+      <section class="card">
+        <h2>État actuel</h2>
+        <div class="readout" id="readout">
+          <div class="state ok" id="readoutState">SYNCHRONISÉ<small id="readoutSub">Les applis suivent leur serveur habituel</small></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Configuration</h2>
+
+        <label for="defaultUrl">Serveur par défaut (proposé au premier lancement)</label>
+        <input type="text" id="defaultUrl" placeholder="https://chat.mondomaine.fr" />
+
+        <div class="row">
+          <label for="forceUrl" style="margin:0;">Forcer le serveur à distance (bascule d'urgence)</label>
+          <label class="switch">
+            <input type="checkbox" id="forceToggle" />
+            <span class="slider"></span>
+          </label>
+        </div>
+        <input type="text" id="forceUrl" placeholder="https://serveur-de-secours.fr" disabled />
+        <div class="footline">Quand c'est activé, TOUTES les applis déjà installées basculent sur cette adresse dans les 10 minutes, même si l'utilisateur avait choisi autre chose.</div>
+
+        <label for="message">Message affiché dans l'appli (optionnel)</label>
+        <textarea id="message" placeholder="Ex : Maintenance en cours, merci de patienter."></textarea>
+
+        <div class="row">
+          <label for="maintenanceToggle" style="margin:0;">Marquer en maintenance</label>
+          <label class="switch">
+            <input type="checkbox" id="maintenanceToggle" />
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div style="margin-top:18px; display:flex; gap:10px; align-items:center;">
+          <button class="btn btn-primary" id="saveBtn">Enregistrer et publier</button>
+          <span class="log" id="saveLog"></span>
+        </div>
+      </section>
+    </div>
+  </div>
+
+<script>
+const OWNER = 'ArkzoxFR';
+const REPO = 'cinny-app';
+const BRANCH = 'main';
+const PATH = 'config/remote_config.json';
+const API_BASE = `https://api.github.com/repos/${OWNER}/${REPO}/contents/${PATH}`;
+
+let currentSha = null;
+let token = null;
+
+const el = (id) => document.getElementById(id);
+
+function setConn(state, text){
+  el('connDot').className = 'dot ' + state;
+  el('connText').textContent = text;
+}
+
+function b64EncodeUnicode(str){
+  return btoa(unescape(encodeURIComponent(str)));
+}
+function b64DecodeUnicode(str){
+  return decodeURIComponent(escape(atob(str)));
+}
+
+async function githubFetch(){
+  const res = await fetch(`${API_BASE}?ref=${BRANCH}`, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Accept': 'application/vnd.github+json'
+    }
+  });
+  if (!res.ok) throw new Error('Lecture impossible (' + res.status + ')');
+  const data = await res.json();
+  currentSha = data.sha;
+  return JSON.parse(b64DecodeUnicode(data.content));
+}
+
+async function githubSave(newConfig){
+  const body = {
+    message: 'admin: mise à jour de la configuration distante',
+    content: b64EncodeUnicode(JSON.stringify(newConfig, null, 2) + '\n'),
+    branch: BRANCH,
+    sha: currentSha
+  };
+  const res = await fetch(API_BASE, {
+    method: 'PUT',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Accept': 'application/vnd.github+json',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(body)
+  });
+  if (!res.ok){
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || ('Écriture impossible (' + res.status + ')'));
+  }
+  const data = await res.json();
+  currentSha = data.content.sha;
+}
+
+function renderReadout(cfg){
+  const readout = el('readout');
+  const state = el('readoutState');
+  readout.className = 'readout';
+  if (cfg.maintenance){
+    readout.classList.add('maintenance');
+    state.className = 'state maintenance';
+    state.innerHTML = 'MAINTENANCE<small>' + (cfg.message || 'Un message de maintenance est actif') + '</small>';
+  } else if (cfg.force_url){
+    readout.classList.add('armed');
+    state.className = 'state armed';
+    state.innerHTML = 'OVERRIDE ACTIF<small>Toutes les applis pointent vers : ' + cfg.force_url + '</small>';
+  } else {
+    state.className = 'state ok';
+    state.innerHTML = 'SYNCHRONISÉ<small>Chaque appli suit le serveur choisi par son utilisateur</small>';
+  }
+  document.body.classList.toggle('armed', !!cfg.force_url && !cfg.maintenance);
+}
+
+function fillForm(cfg){
+  el('defaultUrl').value = cfg.default_url || '';
+  el('forceUrl').value = cfg.force_url || '';
+  el('forceToggle').checked = !!cfg.force_url;
+  el('forceUrl').disabled = !cfg.force_url;
+  el('message').value = cfg.message || '';
+  el('maintenanceToggle').checked = !!cfg.maintenance;
+  renderReadout(cfg);
+}
+
+function readForm(){
+  return {
+    default_url: el('defaultUrl').value.trim(),
+    force_url: el('forceToggle').checked ? el('forceUrl').value.trim() : null,
+    message: el('message').value.trim() || null,
+    maintenance: el('maintenanceToggle').checked,
+    updated_at: new Date().toISOString()
+  };
+}
+
+el('forceToggle').addEventListener('change', () => {
+  el('forceUrl').disabled = !el('forceToggle').checked;
+  renderReadout(readForm());
+});
+el('maintenanceToggle').addEventListener('change', () => renderReadout(readForm()));
+el('forceUrl').addEventListener('input', () => renderReadout(readForm()));
+
+el('connectBtn').addEventListener('click', async () => {
+  const value = el('token').value.trim();
+  if (!value){ return; }
+  token = value;
+  setConn('off', 'connexion…');
+  try {
+    const cfg = await githubFetch();
+    fillForm(cfg);
+    el('panel').classList.remove('hidden');
+    el('disconnectBtn').classList.remove('hidden');
+    el('connectBtn').classList.add('hidden');
+    el('token').disabled = true;
+    setConn('ok', 'connecté');
+    if (el('rememberToken').checked){
+      localStorage.setItem('cinny_admin_token', value);
+    } else {
+      sessionStorage.setItem('cinny_admin_token', value);
+    }
+  } catch (e){
+    setConn('err', e.message);
+  }
+});
+
+el('disconnectBtn').addEventListener('click', () => {
+  token = null;
+  localStorage.removeItem('cinny_admin_token');
+  sessionStorage.removeItem('cinny_admin_token');
+  el('token').value = '';
+  el('token').disabled = false;
+  el('panel').classList.add('hidden');
+  el('disconnectBtn').classList.add('hidden');
+  el('connectBtn').classList.remove('hidden');
+  document.body.classList.remove('armed');
+  setConn('off', 'non connecté');
+});
+
+el('saveBtn').addEventListener('click', async () => {
+  const btn = el('saveBtn');
+  const log = el('saveLog');
+  btn.disabled = true;
+  log.textContent = 'Publication en cours…';
+  try {
+    const newCfg = readForm();
+    await githubSave(newCfg);
+    renderReadout(newCfg);
+    log.textContent = 'Publié à ' + new Date().toLocaleTimeString();
+  } catch (e){
+    log.textContent = 'Erreur : ' + e.message;
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// Auto-reconnect if a token was remembered.
+(function tryAutoConnect(){
+  const saved = localStorage.getItem('cinny_admin_token') || sessionStorage.getItem('cinny_admin_token');
+  if (saved){
+    el('token').value = saved;
+    el('rememberToken').checked = !!localStorage.getItem('cinny_admin_token');
+    el('connectBtn').click();
+  }
+})();
+</script>
+</body>
+</html>

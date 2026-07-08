@@ -1,0 +1,36 @@
+name: Build iOS (non signé)
+
+# NOTE IMPORTANTE :
+# Apple exige une signature avec un compte Apple Developer payant pour
+# installer l'app sur un vrai iPhone ou la publier sur l'App Store /
+# TestFlight. Ce workflow compile juste l'app pour vérifier qu'elle
+# construit correctement (--no-codesign). Pour une vraie distribution
+# iOS, il faudra ajouter vos certificats et provisioning profiles en
+# secrets GitHub, ce que je peux faire dans un second temps si besoin.
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build unsigned iOS app
+        run: flutter build ios --release --no-codesign
+
+      - name: Upload build
+        uses: actions/upload-artifact@v4
+        with:
+          name: cinny-app-ios-unsigned
+          path: build/ios/iphoneos/Runner.app
