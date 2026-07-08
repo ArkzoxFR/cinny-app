@@ -1,8 +1,8 @@
 {
   "default_url": "",
   "force_url": null,
-  "message": null,
-  "maintenance": false,
+  "message": "Test",
+  "maintenance": true,
   "latest_version": null,
-  "updated_at": "2026-07-08T00:00:00Z"
+  "updated_at": "2026-07-08T23:24:23.627Z"
 }
