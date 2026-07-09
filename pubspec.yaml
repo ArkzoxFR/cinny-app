@@ -1,7 +1,7 @@
 name: cinny_app
 description: Client Cinny (Matrix) — Android / iOS / Windows, avec configuration serveur pilotable à distance depuis GitHub.
 publish_to: 'none'
-version: 1.0.3+4
+version: 1.0.4+5
 
 environment:
   sdk: '>=3.3.0 <4.0.0'
