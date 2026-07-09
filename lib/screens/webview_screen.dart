@@ -128,6 +128,12 @@ class _WebviewScreenState extends State<WebviewScreen> {
                       useShouldOverrideUrlLoading: true,
                     ),
                     onWebViewCreated: (controller) => _controller = controller,
+                    shouldOverrideUrlLoading: (controller, navigationAction) async {
+                      // useShouldOverrideUrlLoading exige ce callback : sans lui,
+                      // la navigation (y compris le tout premier chargement) est
+                      // annulée par défaut, quel que soit le site.
+                      return NavigationActionPolicy.ALLOW;
+                    },
                     onLoadStart: (controller, url) {
                       setState(() {
                         _loading = true;
