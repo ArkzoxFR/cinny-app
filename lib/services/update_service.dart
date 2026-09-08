@@ -41,23 +41,40 @@ class UpdateService {
       'https://github.com/${RemoteConfigConstants.owner}/${RemoteConfigConstants.repo}'
       '/releases/download/v$version/CinnyApp-Setup.exe';
 
-  Future<void> checkForUpdate() async {
-    if (!Platform.isWindows) return;
+  /// Renvoie un compte rendu lisible, pour que la vérification manuelle
+  /// puisse dire ce qui s'est passé (et pas juste "rien").
+  Future<String> checkForUpdate() async {
+    if (!Platform.isWindows) {
+      return 'Les mises à jour intégrées ne concernent que Windows.';
+    }
     // Un téléchargement ou une install en attente ne doit pas être
     // interrompu par un re-check périodique.
     final phase = status.value.phase;
-    if (phase == UpdatePhase.downloading || phase == UpdatePhase.readyToRestart) {
-      return;
+    if (phase == UpdatePhase.downloading) return 'Téléchargement déjà en cours.';
+    if (phase == UpdatePhase.readyToRestart) {
+      return 'Mise à jour déjà téléchargée : il ne reste qu\'à redémarrer.';
     }
-
-    final remote = await RemoteConfigService.fetch();
-    final latest = remote?.latestVersion;
-    if (latest == null || latest.isEmpty) return;
 
     final info = await PackageInfo.fromPlatform();
-    if (_isNewer(latest, info.version)) {
-      status.value = UpdateStatus(phase: UpdatePhase.available, latestVersion: latest);
+    final current = info.version;
+
+    final remote = await RemoteConfigService.fetch();
+    if (remote == null) {
+      return 'Impossible de contacter le serveur de configuration '
+          '(version installée : $current).';
     }
+
+    final latest = remote.latestVersion;
+    if (latest == null || latest.isEmpty) {
+      return 'Aucune version n\'est publiée pour l\'instant '
+          '(version installée : $current).';
+    }
+
+    if (_isNewer(latest, current)) {
+      status.value = UpdateStatus(phase: UpdatePhase.available, latestVersion: latest);
+      return 'Version $latest disponible (vous avez $current).';
+    }
+    return 'Vous avez déjà la dernière version ($current).';
   }
 
   bool _isNewer(String latest, String current) {

@@ -205,6 +205,9 @@ class TrayService with TrayListener, WindowListener {
         break;
       case UpdatePhase.error:
       case UpdatePhase.idle:
+        // Permet de forcer la vérification sans attendre le tick de 10 min,
+        // et d'obtenir un message explicite quand rien n'est trouvé.
+        items.add(MenuItem(key: 'check_update', label: 'Vérifier les mises à jour'));
         break;
     }
 
@@ -264,6 +267,9 @@ class TrayService with TrayListener, WindowListener {
         await windowManager.focus();
         await UpdateService.instance.downloadUpdate();
         break;
+      case 'check_update':
+        _notify('Mise à jour', await UpdateService.instance.checkForUpdate());
+        break;
       case 'restart':
         await UpdateService.instance.restartAndInstall();
         break;
@@ -288,5 +294,7 @@ class TrayService with TrayListener, WindowListener {
     // L'utilisateur regarde la fenêtre : la pastille et le clignotement
     // n'ont plus lieu d'être.
     UnreadService.instance.markSeen();
+    // Occasion naturelle de re-vérifier, plutôt que d'attendre le tick.
+    UpdateService.instance.checkForUpdate();
   }
 }
