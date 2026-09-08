@@ -51,7 +51,8 @@ lib/
   services/remote_config_service.dart → lecture du JSON distant sur GitHub
   services/tray_service.dart          → icône barre des tâches (Windows)
   services/update_service.dart        → détection/téléchargement des MAJ (Windows)
-  widgets/update_overlay.dart         → fenêtre de progression pendant le téléchargement
+  services/unread_service.dart        → compteur de messages non lus
+  widgets/update_indicator.dart       → icône + panneau de mise à jour
 config/remote_config.json       → fichier piloté par la console admin
 admin/index.html                → console d'admin (hébergée sur GitHub Pages)
 windows/installer.iss           → script Inno Setup (génère CinnyApp-Setup.exe)
@@ -142,10 +143,18 @@ sombre selon le thème clair/sombre de Windows (`assets/tray_icon_light.ico` /
 
 ### Messages non lus
 
-Quand un message arrive alors que la fenêtre est masquée, l'icône **clignote
-~8 secondes puis garde une pastille rouge numérotée** (1 à 9, puis 9+), et une
-notification Windows native s'affiche. Tout repart à zéro dès que la fenêtre
-reprend le focus.
+Quand un message arrive, une notification Windows native s'affiche et un badge
+rouge numéroté (1 à 9, puis 9+) signale les messages non lus. Où il apparaît
+dépend de l'état de la fenêtre :
+
+- **fenêtre ouverte** : badge sur le **bouton de la barre des tâches**
+  (overlay icon), et le bouton clignote jusqu'à ce que la fenêtre revienne au
+  premier plan — comme Teams (`windows_taskbar`) ;
+- **fenêtre masquée** (fermée vers le tray) : il n'y a plus de bouton dans la
+  barre des tâches, la pastille bascule donc sur l'icône du tray, qui clignote
+  par salves de ~8 s.
+
+Tout repart à zéro dès que la fenêtre reprend le focus.
 
 La détection se fait dans la webview (`_kUnreadBridgeJs` dans
 `webview_screen.dart`), en s'appuyant sur deux signaux émis par Cinny lui-même
@@ -160,9 +169,9 @@ La détection se fait dans la webview (`_kUnreadBridgeJs` dans
   réglages de Cinny : on sait alors au moins qu'il y a quelque chose à lire,
   sans connaître le nombre.
 
-Les icônes avec pastille sont pré-générées (`assets/tray_icon_{light,dark}_N.ico`)
-plutôt que composées à l'exécution, parce que l'API tray de Windows attend un
-chemin de fichier `.ico`.
+Les icônes de badge sont pré-générées (`assets/badge_N.ico` pour la barre des
+tâches, `assets/tray_icon_{light,dark}_N.ico` pour le tray) plutôt que composées
+à l'exécution : les API Windows concernées attendent un chemin de fichier `.ico`.
 
 Publier une mise à jour Windows, entièrement depuis la console admin (rien à
 faire côté code/terminal) :

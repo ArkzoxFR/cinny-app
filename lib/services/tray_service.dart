@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:local_notifier/local_notifier.dart';
 import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
+import 'package:windows_taskbar/windows_taskbar.dart';
 
 import 'unread_service.dart';
 import 'update_service.dart';
@@ -70,25 +71,59 @@ class TrayService with TrayListener, WindowListener {
     PlatformDispatcher.instance.onPlatformBrightnessChanged = null;
   }
 
-  /// Choisit l'icône selon deux axes : le thème système (une icône fixe
-  /// deviendrait invisible sur l'une des deux barres des tâches) et l'état
-  /// des messages non lus (pastille numérotée, masquée une frame sur deux
-  /// pendant le clignotement).
+  static String _badgeSlug(String label) => label == '9+' ? '9plus' : label;
+
+  /// Icône du tray : suit le thème système (une icône fixe deviendrait
+  /// invisible sur l'une des deux barres des tâches).
+  ///
+  /// La pastille n'y apparaît que si la fenêtre est masquée : quand elle est
+  /// ouverte, c'est le bouton de la barre des tâches qui porte le badge (façon
+  /// Teams), et doubler l'information serait redondant. Fenêtre masquée, en
+  /// revanche, il n'y a plus de bouton du tout — le tray est alors le seul
+  /// endroit possible.
   Future<void> _refreshTrayIcon() async {
     final isDark = PlatformDispatcher.instance.platformBrightness == Brightness.dark;
     final theme = isDark ? 'light' : 'dark';
 
     final badge = UnreadService.instance.status.value.badgeLabel;
-    final suffix = (badge != null && _blinkVisible)
-        ? '_${badge == '9+' ? '9plus' : badge}'
-        : '';
+    final showBadgeInTray = badge != null && _blinkVisible && !await _windowIsVisible();
+    final suffix = showBadgeInTray ? '_${_badgeSlug(badge)}' : '';
 
     await trayManager.setIcon(_resolveAssetPath('assets/tray_icon_$theme$suffix.ico'));
   }
 
-  /// Fait clignoter l'icône ~8 secondes à chaque nouveau message, puis laisse
-  /// la pastille affichée en continu : un clignotement sans fin dans la barre
-  /// des tâches serait vite pénible.
+  Future<bool> _windowIsVisible() async {
+    try {
+      return await windowManager.isVisible();
+    } catch (_) {
+      return true;
+    }
+  }
+
+  /// Badge numéroté sur le bouton de la barre des tâches + clignotement du
+  /// bouton jusqu'à ce que la fenêtre revienne au premier plan, comme Teams.
+  Future<void> _refreshTaskbar() async {
+    final badge = UnreadService.instance.status.value.badgeLabel;
+    try {
+      if (badge == null) {
+        await WindowsTaskbar.resetOverlayIcon();
+        WindowsTaskbar.resetFlashTaskbarAppIcon();
+        return;
+      }
+      final n = UnreadService.instance.status.value.count;
+      final plural = n > 1 ? 's' : '';
+      await WindowsTaskbar.setOverlayIcon(
+        ThumbnailToolbarAssetIcon('assets/badge_${_badgeSlug(badge)}.ico'),
+        tooltip: n > 0 ? '$n message$plural non lu$plural' : 'Nouveaux messages',
+      );
+    } catch (e) {
+      debugPrint('Badge barre des tâches indisponible : $e');
+    }
+  }
+
+  /// Clignotement du tray, utilisé seulement quand la fenêtre est masquée
+  /// (sinon c'est le bouton de la barre des tâches qui clignote). Salves de
+  /// ~8 s : un clignotement sans fin deviendrait vite pénible.
   void _startBlinkBurst() {
     _blinkTimer?.cancel();
     var toggles = 0;
@@ -118,11 +153,26 @@ class TrayService with TrayListener, WindowListener {
       );
     }
     _refreshTrayIcon();
+    _refreshTaskbar();
   }
 
-  void _onCinnyNotification(CinnyNotification notification) {
-    _startBlinkBurst();
+  Future<void> _onCinnyNotification(CinnyNotification notification) async {
     _notify(notification.title, notification.body);
+
+    if (await _windowIsVisible()) {
+      // Fenêtre présente dans la barre des tâches : on fait clignoter son
+      // bouton jusqu'à ce qu'elle repasse au premier plan.
+      try {
+        WindowsTaskbar.setFlashTaskbarAppIcon(
+          mode: TaskbarFlashMode.all | TaskbarFlashMode.timernofg,
+          timeout: const Duration(milliseconds: 500),
+        );
+      } catch (e) {
+        debugPrint('Clignotement barre des tâches indisponible : $e');
+      }
+    } else {
+      _startBlinkBurst();
+    }
   }
 
   /// Les assets Flutter ne sont pas accessibles par chemin disque au sens où
@@ -227,6 +277,9 @@ class TrayService with TrayListener, WindowListener {
   void onWindowClose() async {
     if (await windowManager.isPreventClose()) {
       await windowManager.hide();
+      // Plus de bouton dans la barre des tâches : la pastille bascule sur
+      // l'icône du tray.
+      await _refreshTrayIcon();
     }
   }
 
