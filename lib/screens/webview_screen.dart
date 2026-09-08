@@ -5,6 +5,7 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import '../services/config_service.dart';
 import '../services/remote_config_service.dart';
 import '../services/unread_service.dart';
+import '../widgets/update_indicator.dart';
 
 /// Script injecté dans Cinny pour remonter les messages non lus à l'app.
 ///
@@ -190,6 +191,7 @@ class _WebviewScreenState extends State<WebviewScreen> {
       appBar: AppBar(
         title: const Text('Cinny'),
         actions: [
+          const UpdateIndicator(),
           IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: 'Recharger',

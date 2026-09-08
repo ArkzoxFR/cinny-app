@@ -4,7 +4,6 @@ import 'services/remote_config_service.dart';
 import 'services/tray_service.dart';
 import 'screens/setup_screen.dart';
 import 'screens/webview_screen.dart';
-import 'widgets/update_overlay.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -31,14 +30,6 @@ class CinnyApp extends StatelessWidget {
         useMaterial3: true,
         brightness: Brightness.dark,
       ),
-      builder: (context, child) {
-        return Stack(
-          children: [
-            if (child != null) child,
-            const UpdateOverlay(),
-          ],
-        );
-      },
       home: const _StartupGate(),
     );
   }
