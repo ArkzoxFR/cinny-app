@@ -67,18 +67,26 @@ const String _kUnreadBridgeJs = r'''
   // l'image en data-URI (auquel cas le nom de fichier disparaît).
   var UNREAD_PATH_MARKER = '10.5867';
 
+  // Le bundler peut servir le favicon de trois façons : URL de fichier
+  // (le nom contient "unread"/"highlight"), data-URI base64, ou data-URI
+  // SVG URL-encodé. On aplatit les trois en une seule chaîne à inspecter.
+  function faviconProbe(href) {
+    var probe = href;
+    if (href.indexOf('base64,') !== -1) {
+      try { probe += ' ' + atob(href.split('base64,')[1]); } catch (e) {}
+    }
+    try { probe += ' ' + decodeURIComponent(href); } catch (e) {}
+    return probe;
+  }
+
   function faviconState() {
     var links = document.querySelectorAll('link[rel*="icon"]');
     var state = 'none';
     for (var i = 0; i < links.length; i++) {
-      var href = links[i].getAttribute('href') || '';
-      if (href.indexOf('highlight') !== -1) return 'highlight';
-      if (href.indexOf('unread') !== -1) state = 'unread';
-      else if (href.indexOf('data:') === 0 && href.indexOf('base64,') !== -1) {
-        try {
-          var svg = atob(href.split('base64,')[1]);
-          if (svg.indexOf(UNREAD_PATH_MARKER) !== -1) state = 'unread';
-        } catch (e) {}
+      var probe = faviconProbe(links[i].getAttribute('href') || '');
+      if (probe.indexOf('highlight') !== -1) return 'highlight';
+      if (probe.indexOf('unread') !== -1 || probe.indexOf(UNREAD_PATH_MARKER) !== -1) {
+        state = 'unread';
       }
     }
     return state;

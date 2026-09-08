@@ -56,16 +56,22 @@ class UnreadService {
   }
 
   /// Cinny a changé son favicon : 'none', 'unread' ou 'highlight'.
+  ///
+  /// C'est Cinny qui fait autorité sur "tout est lu" : dès qu'il repasse à
+  /// 'none' (lecture ici ou depuis un autre appareil), on efface tout, badge
+  /// et compteur compris.
   void onFaviconState(String state) {
     final current = status.value;
+
     if (state == 'none') {
-      // Tout a été lu dans Cinny (ici ou depuis un autre appareil) : on efface.
       if (current.hasUnread) status.value = const UnreadStatus();
       return;
     }
-    final highlight = state == 'highlight';
-    if (current.highlight != highlight) {
-      status.value = UnreadStatus(count: current.count, highlight: highlight);
+
+    // 'unread' comme 'highlight' signifient tous deux qu'il reste quelque
+    // chose à lire — la nuance mention/simple message ne change rien au badge.
+    if (!current.highlight) {
+      status.value = UnreadStatus(count: current.count, highlight: true);
     }
   }
 

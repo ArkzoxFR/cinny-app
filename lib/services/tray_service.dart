@@ -158,7 +158,9 @@ class TrayService with TrayListener, WindowListener {
   }
 
   Future<void> _onCinnyNotification(CinnyNotification notification) async {
-    _notify(notification.title, notification.body);
+    // Pas de toast Windows pour les messages : le badge et le clignotement
+    // suffisent. On continue en revanche d'intercepter window.Notification
+    // côté Cinny, c'est ce qui alimente le compteur.
 
     if (await _windowIsVisible()) {
       // Fenêtre présente dans la barre des tâches : on fait clignoter son
