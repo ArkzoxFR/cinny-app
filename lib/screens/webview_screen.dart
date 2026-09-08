@@ -1,8 +1,114 @@
 import 'dart:async';
+import 'dart:collection';
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import '../services/config_service.dart';
 import '../services/remote_config_service.dart';
+import '../services/unread_service.dart';
+
+/// Script injecté dans Cinny pour remonter les messages non lus à l'app.
+///
+/// Cinny signale un nouveau message de deux façons (cf. son
+/// ClientNonUIFeatures.tsx) : il appelle `window.Notification`, et il bascule
+/// son favicon sur cinny-unread.svg / cinny-highlight.svg. On écoute les deux :
+/// le premier donne le compteur, le second sert de filet si l'utilisateur a
+/// désactivé les notifications dans Cinny.
+const String _kUnreadBridgeJs = r'''
+(function () {
+  if (window.__cinnyBridgeInstalled) return;
+  window.__cinnyBridgeInstalled = true;
+
+  function post(handler, payload) {
+    try {
+      if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
+        window.flutter_inappwebview.callHandler(handler, payload);
+      }
+    } catch (e) {}
+  }
+
+  // Cinny ne notifie que si Notification.permission vaut 'granted'. Dans une
+  // webview il n'y a pas d'interface pour accorder cette permission, donc on
+  // substitue notre propre implémentation : elle se déclare autorisée et
+  // relaie chaque notification à l'application native.
+  function CinnyNotification(title, options) {
+    options = options || {};
+    this.title = title;
+    this.body = options.body || '';
+    this.onclick = null;
+    this.onclose = null;
+    this.onerror = null;
+    this.onshow = null;
+    post('cinnyNotification', {
+      title: String(title == null ? '' : title),
+      body: String(options.body == null ? '' : options.body)
+    });
+  }
+  CinnyNotification.prototype.close = function () {};
+  CinnyNotification.prototype.addEventListener = function () {};
+  CinnyNotification.prototype.removeEventListener = function () {};
+  CinnyNotification.permission = 'granted';
+  CinnyNotification.requestPermission = function (cb) {
+    if (cb) cb('granted');
+    return Promise.resolve('granted');
+  };
+  try {
+    Object.defineProperty(window, 'Notification', {
+      configurable: true,
+      writable: true,
+      value: CinnyNotification
+    });
+  } catch (e) {
+    window.Notification = CinnyNotification;
+  }
+
+  // Les deux favicons "non lu" partagent un tracé absent du logo normal ;
+  // on le cherche aussi dans le SVG décodé, car le bundler peut inliner
+  // l'image en data-URI (auquel cas le nom de fichier disparaît).
+  var UNREAD_PATH_MARKER = '10.5867';
+
+  function faviconState() {
+    var links = document.querySelectorAll('link[rel*="icon"]');
+    var state = 'none';
+    for (var i = 0; i < links.length; i++) {
+      var href = links[i].getAttribute('href') || '';
+      if (href.indexOf('highlight') !== -1) return 'highlight';
+      if (href.indexOf('unread') !== -1) state = 'unread';
+      else if (href.indexOf('data:') === 0 && href.indexOf('base64,') !== -1) {
+        try {
+          var svg = atob(href.split('base64,')[1]);
+          if (svg.indexOf(UNREAD_PATH_MARKER) !== -1) state = 'unread';
+        } catch (e) {}
+      }
+    }
+    return state;
+  }
+
+  var lastState = null;
+  function checkFavicon() {
+    var s = faviconState();
+    if (s !== lastState) {
+      lastState = s;
+      post('cinnyUnreadState', { state: s });
+    }
+  }
+
+  function start() {
+    checkFavicon();
+    try {
+      new MutationObserver(checkFavicon).observe(document.head, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['href']
+      });
+    } catch (e) {}
+    setInterval(checkFavicon, 5000);
+  }
+
+  if (document.head) start();
+  else document.addEventListener('DOMContentLoaded', start);
+})();
+''';
 
 class WebviewScreen extends StatefulWidget {
   final String url;
@@ -127,7 +233,40 @@ class _WebviewScreenState extends State<WebviewScreen> {
                       useOnDownloadStart: true,
                       useShouldOverrideUrlLoading: true,
                     ),
-                    onWebViewCreated: (controller) => _controller = controller,
+                    initialUserScripts: UnmodifiableListView([
+                      UserScript(
+                        source: _kUnreadBridgeJs,
+                        injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+                      ),
+                    ]),
+                    onWebViewCreated: (controller) {
+                      _controller = controller;
+                      controller.addJavaScriptHandler(
+                        handlerName: 'cinnyNotification',
+                        callback: (args) {
+                          final data = args.isNotEmpty && args.first is Map
+                              ? Map<String, dynamic>.from(args.first as Map)
+                              : const <String, dynamic>{};
+                          UnreadService.instance.onNotification(
+                            title: (data['title'] as String?)?.trim(),
+                            body: (data['body'] as String?)?.trim(),
+                          );
+                          return null;
+                        },
+                      );
+                      controller.addJavaScriptHandler(
+                        handlerName: 'cinnyUnreadState',
+                        callback: (args) {
+                          final data = args.isNotEmpty && args.first is Map
+                              ? Map<String, dynamic>.from(args.first as Map)
+                              : const <String, dynamic>{};
+                          UnreadService.instance.onFaviconState(
+                            (data['state'] as String?) ?? 'none',
+                          );
+                          return null;
+                        },
+                      );
+                    },
                     shouldOverrideUrlLoading: (controller, navigationAction) async {
                       // useShouldOverrideUrlLoading exige ce callback : sans lui,
                       // la navigation (y compris le tout premier chargement) est
@@ -142,6 +281,10 @@ class _WebviewScreenState extends State<WebviewScreen> {
                     },
                     onLoadStop: (controller, url) {
                       setState(() => _loading = false);
+                      // Filet de sécurité : si initialUserScripts n'est pas
+                      // honoré sur cette plateforme, on réinjecte ici. Le
+                      // script se protège lui-même contre la double injection.
+                      controller.evaluateJavascript(source: _kUnreadBridgeJs);
                     },
                     onReceivedError: (controller, request, error) {
                       if (request.isForMainFrame ?? true) {

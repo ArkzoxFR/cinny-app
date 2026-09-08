@@ -7,6 +7,7 @@ import 'package:local_notifier/local_notifier.dart';
 import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
 
+import 'unread_service.dart';
 import 'update_service.dart';
 
 /// Icône dans la barre des tâches Windows : clic sur la croix de la fenêtre
@@ -19,6 +20,10 @@ class TrayService with TrayListener, WindowListener {
 
   bool _initialized = false;
   Timer? _updateCheckTimer;
+
+  Timer? _blinkTimer;
+  bool _blinkVisible = true;
+  StreamSubscription<CinnyNotification>? _notificationSub;
 
   Future<void> init() async {
     if (!Platform.isWindows || _initialized) return;
@@ -34,12 +39,14 @@ class TrayService with TrayListener, WindowListener {
 
       await localNotifier.setup(appName: 'Cinny', shortcutPolicy: ShortcutPolicy.requireCreate);
 
-      await _applyThemedIcon();
-      PlatformDispatcher.instance.onPlatformBrightnessChanged = _applyThemedIcon;
+      await _refreshTrayIcon();
+      PlatformDispatcher.instance.onPlatformBrightnessChanged = _refreshTrayIcon;
       await trayManager.setToolTip('Cinny');
       trayManager.addListener(this);
 
       UpdateService.instance.status.addListener(_onUpdateStatusChanged);
+      UnreadService.instance.status.addListener(_onUnreadChanged);
+      _notificationSub = UnreadService.instance.notifications.listen(_onCinnyNotification);
       await _rebuildMenu();
 
       _updateCheckTimer = Timer.periodic(
@@ -54,20 +61,68 @@ class TrayService with TrayListener, WindowListener {
 
   void dispose() {
     _updateCheckTimer?.cancel();
+    _blinkTimer?.cancel();
+    _notificationSub?.cancel();
     windowManager.removeListener(this);
     trayManager.removeListener(this);
     UpdateService.instance.status.removeListener(_onUpdateStatusChanged);
+    UnreadService.instance.status.removeListener(_onUnreadChanged);
     PlatformDispatcher.instance.onPlatformBrightnessChanged = null;
   }
 
-  /// Choisit l'icône blanche (thème sombre) ou noire (thème clair) selon le
-  /// thème système actuel, et réagit si l'utilisateur le change en cours de
-  /// route — un icône fixe deviendrait invisible sur l'une des deux barres
-  /// des tâches.
-  Future<void> _applyThemedIcon() async {
+  /// Choisit l'icône selon deux axes : le thème système (une icône fixe
+  /// deviendrait invisible sur l'une des deux barres des tâches) et l'état
+  /// des messages non lus (pastille numérotée, masquée une frame sur deux
+  /// pendant le clignotement).
+  Future<void> _refreshTrayIcon() async {
     final isDark = PlatformDispatcher.instance.platformBrightness == Brightness.dark;
-    final asset = isDark ? 'assets/tray_icon_light.ico' : 'assets/tray_icon_dark.ico';
-    await trayManager.setIcon(_resolveAssetPath(asset));
+    final theme = isDark ? 'light' : 'dark';
+
+    final badge = UnreadService.instance.status.value.badgeLabel;
+    final suffix = (badge != null && _blinkVisible)
+        ? '_${badge == '9+' ? '9plus' : badge}'
+        : '';
+
+    await trayManager.setIcon(_resolveAssetPath('assets/tray_icon_$theme$suffix.ico'));
+  }
+
+  /// Fait clignoter l'icône ~8 secondes à chaque nouveau message, puis laisse
+  /// la pastille affichée en continu : un clignotement sans fin dans la barre
+  /// des tâches serait vite pénible.
+  void _startBlinkBurst() {
+    _blinkTimer?.cancel();
+    var toggles = 0;
+    _blinkTimer = Timer.periodic(const Duration(milliseconds: 600), (timer) {
+      toggles++;
+      _blinkVisible = !_blinkVisible;
+      _refreshTrayIcon();
+      if (toggles >= 14) {
+        timer.cancel();
+        _blinkVisible = true;
+        _refreshTrayIcon();
+      }
+    });
+  }
+
+  void _onUnreadChanged() {
+    final status = UnreadService.instance.status.value;
+    if (!status.hasUnread) {
+      _blinkTimer?.cancel();
+      _blinkVisible = true;
+      trayManager.setToolTip('Cinny');
+    } else {
+      final n = status.count;
+      final plural = n > 1 ? 's' : '';
+      trayManager.setToolTip(
+        n > 0 ? 'Cinny — $n message$plural non lu$plural' : 'Cinny — nouveaux messages',
+      );
+    }
+    _refreshTrayIcon();
+  }
+
+  void _onCinnyNotification(CinnyNotification notification) {
+    _startBlinkBurst();
+    _notify(notification.title, notification.body);
   }
 
   /// Les assets Flutter ne sont pas accessibles par chemin disque au sens où
@@ -173,5 +228,12 @@ class TrayService with TrayListener, WindowListener {
     if (await windowManager.isPreventClose()) {
       await windowManager.hide();
     }
+  }
+
+  @override
+  void onWindowFocus() {
+    // L'utilisateur regarde la fenêtre : la pastille et le clignotement
+    // n'ont plus lieu d'être.
+    UnreadService.instance.markSeen();
   }
 }

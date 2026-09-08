@@ -140,6 +140,30 @@ L'icône bascule automatiquement entre une version blanche et une version
 sombre selon le thème clair/sombre de Windows (`assets/tray_icon_light.ico` /
 `tray_icon_dark.ico`), pour rester lisible sur les deux.
 
+### Messages non lus
+
+Quand un message arrive alors que la fenêtre est masquée, l'icône **clignote
+~8 secondes puis garde une pastille rouge numérotée** (1 à 9, puis 9+), et une
+notification Windows native s'affiche. Tout repart à zéro dès que la fenêtre
+reprend le focus.
+
+La détection se fait dans la webview (`_kUnreadBridgeJs` dans
+`webview_screen.dart`), en s'appuyant sur deux signaux émis par Cinny lui-même
+(cf. son `ClientNonUIFeatures.tsx`) :
+
+- `window.Notification`, appelé à chaque nouveau message — c'est ce qui
+  alimente le compteur. Le script substitue sa propre implémentation, qui se
+  déclare autorisée (une webview n'a pas d'interface pour accorder la
+  permission de notification) et relaie tout à l'app native.
+- le favicon, que Cinny bascule sur `cinny-unread.svg` / `cinny-highlight.svg` —
+  filet de sécurité si l'utilisateur a désactivé les notifications dans les
+  réglages de Cinny : on sait alors au moins qu'il y a quelque chose à lire,
+  sans connaître le nombre.
+
+Les icônes avec pastille sont pré-générées (`assets/tray_icon_{light,dark}_N.ico`)
+plutôt que composées à l'exécution, parce que l'API tray de Windows attend un
+chemin de fichier `.ico`.
+
 Publier une mise à jour Windows, entièrement depuis la console admin (rien à
 faire côté code/terminal) :
 
