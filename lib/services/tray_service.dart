@@ -154,6 +154,7 @@ class TrayService with TrayListener, WindowListener {
     }
     _refreshTrayIcon();
     _refreshTaskbar();
+    _rebuildMenu(); // fait apparaître/disparaître "Marquer comme lu"
   }
 
   Future<void> _onCinnyNotification(CinnyNotification notification) async {
@@ -186,8 +187,12 @@ class TrayService with TrayListener, WindowListener {
   Menu _buildMenu(UpdateStatus status) {
     final items = <MenuItem>[
       MenuItem(key: 'open', label: 'Ouvrir Cinny'),
-      MenuItem.separator(),
     ];
+
+    if (UnreadService.instance.status.value.hasUnread) {
+      items.add(MenuItem(key: 'mark_seen', label: 'Marquer comme lu'));
+    }
+    items.add(MenuItem.separator());
 
     switch (status.phase) {
       case UpdatePhase.available:
@@ -267,6 +272,9 @@ class TrayService with TrayListener, WindowListener {
         await windowManager.focus();
         await UpdateService.instance.downloadUpdate();
         break;
+      case 'mark_seen':
+        UnreadService.instance.markSeen();
+        break;
       case 'check_update':
         _notify('Mise à jour', await UpdateService.instance.checkForUpdate());
         break;
@@ -291,10 +299,13 @@ class TrayService with TrayListener, WindowListener {
 
   @override
   void onWindowFocus() {
-    // L'utilisateur regarde la fenêtre : la pastille et le clignotement
-    // n'ont plus lieu d'être.
-    UnreadService.instance.markSeen();
-    // Occasion naturelle de re-vérifier, plutôt que d'attendre le tick.
+    // La pastille n'est PAS effacée ici : revenir sur la fenêtre ne veut pas
+    // dire avoir lu les messages. C'est Cinny qui fait foi, via son favicon
+    // (voir UnreadService.onFaviconState), et l'entrée "Marquer comme lu"
+    // sert de secours.
+    //
+    // Occasion naturelle de re-vérifier les mises à jour, plutôt que
+    // d'attendre le tick de 10 minutes.
     UpdateService.instance.checkForUpdate();
   }
 }

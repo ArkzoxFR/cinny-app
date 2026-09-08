@@ -51,7 +51,12 @@ Name: "{group}\Cinny"; Filename: "{app}\cinny_app.exe"
 Name: "{autodesktop}\Cinny"; Filename: "{app}\cinny_app.exe"; Tasks: desktopicon
 
 [Run]
-; Ne propose "Lancer Cinny" qu'à la fin d'une install manuelle interactive :
-; "skipifsilent" fait que ça ne se déclenche jamais pendant une mise à jour
-; silencieuse (c'est /RESTARTAPPLICATIONS qui s'en charge dans ce cas).
+; Install manuelle interactive : case à cocher "Lancer Cinny" en fin d'assistant.
 Filename: "{app}\cinny_app.exe"; Description: "Lancer Cinny"; Flags: nowait postinstall skipifsilent runasoriginaluser
+
+; Mise à jour silencieuse déclenchée depuis l'app : il faut relancer Cinny
+; nous-mêmes. On ne peut pas compter sur /RESTARTAPPLICATIONS (il ne relance
+; que les applications que l'installeur a lui-même fermées, or l'app a déjà
+; quitté), ni sur l'entrée ci-dessus (le drapeau "postinstall" implique
+; "skipifsilent" par défaut, donc elle est ignorée en mode silencieux).
+Filename: "{app}\cinny_app.exe"; Flags: nowait runasoriginaluser; Check: WizardSilent
